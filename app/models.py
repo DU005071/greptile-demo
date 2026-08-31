@@ -17,6 +17,7 @@ class BookingRequest(BaseModel):
     passenger_name: str = Field(min_length=2, max_length=100)
     passenger_email: str
     bags: int = Field(default=0, ge=0, le=5)
+    discount_codes: list[str] = Field(default_factory=list)
 
 
 class Booking(BaseModel):
