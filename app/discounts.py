@@ -1,3 +1,4 @@
+import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
@@ -24,15 +25,21 @@ DISCOUNT_CODES: dict[str, DiscountCode] = {
 }
 
 
+# Sync endpoints run in FastAPI's threadpool, so redemptions race without
+# a lock around the usage-limit check and increment.
+_redeem_lock = threading.Lock()
+
+
 def redeem(code: str) -> DiscountCode | None:
     """Look up and consume a discount code. Returns None if the code
     is unknown, expired, or has reached its usage limit."""
     discount = DISCOUNT_CODES.get(code.strip().upper())
     if discount is None:
         return None
-    if discount.used >= discount.max_uses:
-        return None
-    if datetime.now(timezone.utc) > discount.valid_until:
-        return None
-    discount.used += 1
+    with _redeem_lock:
+        if discount.used >= discount.max_uses:
+            return None
+        if datetime.now(timezone.utc) > discount.valid_until:
+            return None
+        discount.used += 1
     return discount
