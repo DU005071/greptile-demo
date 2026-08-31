@@ -19,7 +19,7 @@ def create_booking(request: BookingRequest) -> Booking:
     if flight.seats_available < 1:
         raise BookingError(f"Flight {request.flight_no} is sold out")
 
-    total = calculate_total(flight, request.bags)
+    total = calculate_total(flight, request.bags, request.discount_codes)
     booking = Booking(
         booking_id=uuid.uuid4().hex[:8].upper(),
         flight_no=flight.flight_no,
