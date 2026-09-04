@@ -36,3 +36,14 @@ def create_booking(request: BookingRequest) -> Booking:
 
 def get_booking(booking_id: str) -> Booking | None:
     return BOOKINGS.get(booking_id.upper())
+
+
+def cancel_booking(booking_id: str) -> Booking | None:
+    """Remove a booking and release its seat back to the flight."""
+    booking = BOOKINGS.pop(booking_id.upper(), None)
+    if booking is None:
+        return None
+    flight = FLIGHTS.get(booking.flight_no)
+    if flight is not None:
+        flight.seats_available += 1
+    return booking
