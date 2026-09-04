@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 
-from app.bookings import BookingError, create_booking, get_booking
+from app.bookings import BookingError, cancel_booking, create_booking, get_booking
 from app.flights import get_flight, list_flights
 from app.models import Booking, BookingRequest, Flight
 
@@ -34,3 +34,10 @@ def booking_detail(booking_id: str):
     if booking is None:
         raise HTTPException(status_code=404, detail="Booking not found")
     return booking
+
+
+@app.delete("/bookings/{booking_id}", status_code=204)
+def cancel(booking_id: str):
+    booking = cancel_booking(booking_id)
+    if booking is None:
+        raise HTTPException(status_code=404, detail="Booking not found")
