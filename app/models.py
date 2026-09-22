@@ -4,6 +4,8 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 SeatPreference = Literal["window", "aisle", "any"]
+SeatPosition = Literal["window", "middle", "aisle"]
+SeatZone = Literal["front", "exit", "standard"]
 
 
 class Flight(BaseModel):
@@ -43,6 +45,39 @@ class BookingCreated(Booking):
     access_token: str
 
 
+class Seat(BaseModel):
+    seat: str
+    row: int
+    letter: str
+    position: SeatPosition
+    zone: SeatZone
+    price: float
+    available: bool
+
+
+class SeatMap(BaseModel):
+    flight_no: str
+    rows: int
+    seats_per_row: int
+    available: int
+    prices: dict[SeatZone, float]
+    seats: list[Seat]
+
+
+class SeatSelectionRequest(BaseModel):
+    seat: str = Field(min_length=2, max_length=3, examples=["12A"])
+
+
+class SeatSelection(BaseModel):
+    booking_id: str
+    flight_no: str
+    seat: str
+    position: SeatPosition
+    zone: SeatZone
+    price: float
+    selected_at: datetime
+
+
 class CheckInRequest(BaseModel):
     seat_preference: SeatPreference = "any"
 
@@ -55,6 +90,8 @@ class BoardingPass(BaseModel):
     destination: str
     seat: str
     seat_preference_met: bool
+    seat_selected_in_advance: bool = False
+    seat_price: float = 0.0
     departure: datetime
     boarding_time: datetime
     checked_in_at: datetime

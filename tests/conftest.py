@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from fastapi.testclient import TestClient
 
-from app import bookings, checkin
+from app import bookings, checkin, seats
 from app.flights import FLIGHTS
 from app.main import app
 
@@ -27,7 +27,8 @@ def reset_state():
     bookings.BOOKINGS.clear()
     bookings._ACCESS_TOKEN_HASHES.clear()
     checkin.BOARDING_PASSES.clear()
-    checkin._TAKEN_SEATS.clear()
+    checkin.SEAT_SELECTIONS.clear()
+    seats._TAKEN_SEATS.clear()
     for no, flight in FLIGHTS.items():
         flight.departure = original_departures[no]
         flight.seats_available = original_seats[no]

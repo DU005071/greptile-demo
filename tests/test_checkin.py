@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from app import checkin
+from app import checkin, seats
 from app.flights import FLIGHTS
 from tests.conftest import OPEN_FLIGHT, bearer
 
@@ -179,11 +179,11 @@ def test_concurrent_check_ins_for_one_booking_succeed_once(client, booking_id, a
 
     statuses = sorted(r.status_code for r in responses)
     assert statuses == [201] + [409] * 9
-    assert len(checkin._TAKEN_SEATS[OPEN_FLIGHT]) == 1
+    assert len(seats._TAKEN_SEATS[OPEN_FLIGHT]) == 1
 
 
 def test_falls_back_to_any_seat_when_preference_is_exhausted(client):
-    checkin._TAKEN_SEATS[OPEN_FLIGHT] = {f"{row}{letter}" for row in range(1, 31) for letter in "AF"}
+    seats._TAKEN_SEATS[OPEN_FLIGHT] = {f"{row}{letter}" for row in range(1, 31) for letter in "AF"}
     booking_id, auth = _book(client, "Ada")
 
     response = client.post(f"/bookings/{booking_id}/check-in", json={"seat_preference": "window"}, headers=auth)
