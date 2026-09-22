@@ -1,6 +1,9 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
+
+SeatPreference = Literal["window", "aisle", "any"]
 
 
 class Flight(BaseModel):
@@ -27,3 +30,20 @@ class Booking(BaseModel):
     bags: int
     total_price: float
     created_at: datetime
+
+
+class CheckInRequest(BaseModel):
+    seat_preference: SeatPreference = "any"
+
+
+class BoardingPass(BaseModel):
+    booking_id: str
+    flight_no: str
+    passenger_name: str
+    origin: str
+    destination: str
+    seat: str
+    seat_preference_met: bool
+    departure: datetime
+    boarding_time: datetime
+    checked_in_at: datetime
