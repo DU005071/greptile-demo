@@ -5,20 +5,31 @@ import pytest
 
 from app import checkin
 from app.flights import FLIGHTS
-from tests.conftest import OPEN_FLIGHT
+from tests.conftest import OPEN_FLIGHT, bearer
 
 
-def _book(client, name: str) -> str:
+def _book(client, name: str) -> tuple[str, dict[str, str]]:
+    """Create a booking and return its ID together with its Authorization header."""
     response = client.post(
         "/bookings",
         json={"flight_no": OPEN_FLIGHT, "passenger_name": name, "passenger_email": f"{name.lower()}@example.com"},
     )
     assert response.status_code == 201
-    return response.json()["booking_id"]
+    body = response.json()
+    return body["booking_id"], bearer(body["access_token"])
 
 
-def test_check_in_returns_boarding_pass(client, booking_id):
-    response = client.post(f"/bookings/{booking_id}/check-in", json={"seat_preference": "window"})
+def test_booking_response_carries_access_token_only_once(client, booking):
+    assert len(booking["access_token"]) >= 32
+
+    detail = client.get(f"/bookings/{booking['booking_id']}")
+
+    assert detail.status_code == 200
+    assert "access_token" not in detail.json()
+
+
+def test_check_in_returns_boarding_pass(client, booking_id, auth):
+    response = client.post(f"/bookings/{booking_id}/check-in", json={"seat_preference": "window"}, headers=auth)
 
     assert response.status_code == 201
     body = response.json()
@@ -28,60 +39,86 @@ def test_check_in_returns_boarding_pass(client, booking_id):
     assert body["seat_preference_met"] is True
 
 
-def test_check_in_without_body_defaults_to_any_seat(client, booking_id):
-    response = client.post(f"/bookings/{booking_id}/check-in")
+def test_check_in_without_body_defaults_to_any_seat(client, booking_id, auth):
+    response = client.post(f"/bookings/{booking_id}/check-in", headers=auth)
 
     assert response.status_code == 201
     assert response.json()["seat"] == "1A"
 
 
-def test_invalid_seat_preference_is_422(client, booking_id):
-    response = client.post(f"/bookings/{booking_id}/check-in", json={"seat_preference": "middle"})
+def test_check_in_without_token_is_401(client, booking_id):
+    response = client.post(f"/bookings/{booking_id}/check-in")
+
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "Bearer"
+    assert booking_id not in checkin.BOARDING_PASSES
+
+
+def test_check_in_with_another_bookings_token_is_404(client, booking_id):
+    _, other_auth = _book(client, "Mallory")
+
+    response = client.post(f"/bookings/{booking_id}/check-in", headers=other_auth)
+
+    assert response.status_code == 404
+    assert booking_id not in checkin.BOARDING_PASSES
+
+
+def test_invalid_seat_preference_is_422(client, booking_id, auth):
+    response = client.post(f"/bookings/{booking_id}/check-in", json={"seat_preference": "middle"}, headers=auth)
 
     assert response.status_code == 422
     assert booking_id not in checkin.BOARDING_PASSES
 
 
-def test_boarding_pass_is_retrievable_after_check_in(client, booking_id):
-    client.post(f"/bookings/{booking_id}/check-in")
+def test_boarding_pass_is_retrievable_after_check_in(client, booking_id, auth):
+    client.post(f"/bookings/{booking_id}/check-in", headers=auth)
 
-    response = client.get(f"/bookings/{booking_id.lower()}/boarding-pass")
+    response = client.get(f"/bookings/{booking_id.lower()}/boarding-pass", headers=auth)
 
     assert response.status_code == 200
     assert response.json()["seat"] == "1A"
 
 
-def test_boarding_pass_404_before_check_in(client, booking_id):
-    response = client.get(f"/bookings/{booking_id}/boarding-pass")
+def test_boarding_pass_requires_matching_token(client, booking_id, auth):
+    client.post(f"/bookings/{booking_id}/check-in", headers=auth)
+    _, other_auth = _book(client, "Mallory")
+
+    assert client.get(f"/bookings/{booking_id}/boarding-pass").status_code == 401
+    assert client.get(f"/bookings/{booking_id}/boarding-pass", headers=other_auth).status_code == 404
+    assert client.get(f"/bookings/{booking_id}/boarding-pass", headers=auth).status_code == 200
+
+
+def test_boarding_pass_404_before_check_in(client, booking_id, auth):
+    response = client.get(f"/bookings/{booking_id}/boarding-pass", headers=auth)
     assert response.status_code == 404
 
 
-def test_second_check_in_is_conflict(client, booking_id):
-    client.post(f"/bookings/{booking_id}/check-in")
+def test_second_check_in_is_conflict(client, booking_id, auth):
+    client.post(f"/bookings/{booking_id}/check-in", headers=auth)
 
-    response = client.post(f"/bookings/{booking_id}/check-in")
+    response = client.post(f"/bookings/{booking_id}/check-in", headers=auth)
 
     assert response.status_code == 409
 
 
-def test_check_in_unknown_booking_is_404(client):
-    response = client.post("/bookings/NOPE1234/check-in")
+def test_check_in_unknown_booking_is_404(client, auth):
+    response = client.post("/bookings/NOPE1234/check-in", headers=auth)
     assert response.status_code == 404
 
 
-def test_check_in_rejected_before_window_opens(client, booking_id):
+def test_check_in_rejected_before_window_opens(client, booking_id, auth):
     FLIGHTS[OPEN_FLIGHT].departure = datetime.now(timezone.utc) + timedelta(days=3)
 
-    response = client.post(f"/bookings/{booking_id}/check-in")
+    response = client.post(f"/bookings/{booking_id}/check-in", headers=auth)
 
     assert response.status_code == 400
     assert "opens at" in response.json()["detail"]
 
 
-def test_check_in_rejected_after_window_closes(client, booking_id):
+def test_check_in_rejected_after_window_closes(client, booking_id, auth):
     FLIGHTS[OPEN_FLIGHT].departure = datetime.now(timezone.utc) + timedelta(minutes=30)
 
-    response = client.post(f"/bookings/{booking_id}/check-in")
+    response = client.post(f"/bookings/{booking_id}/check-in", headers=auth)
 
     assert response.status_code == 400
     assert "closed" in response.json()["detail"]
@@ -113,31 +150,32 @@ def test_window_closes_exactly_45_minutes_before_departure():
 def test_seats_are_not_handed_out_twice(client):
     seats = set()
     for name in ("Ada", "Grace", "Linus"):
-        booking_id = _book(client, name)
-        response = client.post(f"/bookings/{booking_id}/check-in", json={"seat_preference": "aisle"})
+        booking_id, auth = _book(client, name)
+        response = client.post(f"/bookings/{booking_id}/check-in", json={"seat_preference": "aisle"}, headers=auth)
         seats.add(response.json()["seat"])
 
     assert seats == {"1C", "1D", "2C"}
 
 
 def test_concurrent_check_ins_never_share_a_seat(client):
-    booking_ids = [_book(client, f"Passenger{i}") for i in range(20)]
+    bookings = [_book(client, f"Passenger{i}") for i in range(20)]
 
-    def do_check_in(booking_id: str):
-        return client.post(f"/bookings/{booking_id}/check-in", json={"seat_preference": "window"})
+    def do_check_in(entry: tuple[str, dict[str, str]]):
+        booking_id, auth = entry
+        return client.post(f"/bookings/{booking_id}/check-in", json={"seat_preference": "window"}, headers=auth)
 
     with ThreadPoolExecutor(max_workers=8) as pool:
-        responses = list(pool.map(do_check_in, booking_ids))
+        responses = list(pool.map(do_check_in, bookings))
 
     assert all(r.status_code == 201 for r in responses)
     seats = [r.json()["seat"] for r in responses]
-    assert len(set(seats)) == len(booking_ids)
-    assert len(checkin.BOARDING_PASSES) == len(booking_ids)
+    assert len(set(seats)) == len(bookings)
+    assert len(checkin.BOARDING_PASSES) == len(bookings)
 
 
-def test_concurrent_check_ins_for_one_booking_succeed_once(client, booking_id):
+def test_concurrent_check_ins_for_one_booking_succeed_once(client, booking_id, auth):
     with ThreadPoolExecutor(max_workers=8) as pool:
-        responses = list(pool.map(lambda _: client.post(f"/bookings/{booking_id}/check-in"), range(10)))
+        responses = list(pool.map(lambda _: client.post(f"/bookings/{booking_id}/check-in", headers=auth), range(10)))
 
     statuses = sorted(r.status_code for r in responses)
     assert statuses == [201] + [409] * 9
@@ -146,9 +184,9 @@ def test_concurrent_check_ins_for_one_booking_succeed_once(client, booking_id):
 
 def test_falls_back_to_any_seat_when_preference_is_exhausted(client):
     checkin._TAKEN_SEATS[OPEN_FLIGHT] = {f"{row}{letter}" for row in range(1, 31) for letter in "AF"}
-    booking_id = _book(client, "Ada")
+    booking_id, auth = _book(client, "Ada")
 
-    response = client.post(f"/bookings/{booking_id}/check-in", json={"seat_preference": "window"})
+    response = client.post(f"/bookings/{booking_id}/check-in", json={"seat_preference": "window"}, headers=auth)
 
     assert response.status_code == 201
     assert response.json()["seat"] == "1B"

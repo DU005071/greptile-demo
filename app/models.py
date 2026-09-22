@@ -32,6 +32,17 @@ class Booking(BaseModel):
     created_at: datetime
 
 
+class BookingCreated(Booking):
+    """Booking as returned right after creation.
+
+    ``access_token`` is shown only in this response. The client must send it
+    as a Bearer token to check in and to fetch the boarding pass, so it should
+    be stored securely and never logged.
+    """
+
+    access_token: str
+
+
 class CheckInRequest(BaseModel):
     seat_preference: SeatPreference = "any"
 

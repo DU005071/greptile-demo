@@ -10,6 +10,11 @@ from app.main import app
 OPEN_FLIGHT = "XQ140"
 
 
+def bearer(access_token: str) -> dict[str, str]:
+    """Build the Authorization header for a booking access token."""
+    return {"Authorization": f"Bearer {access_token}"}
+
+
 @pytest.fixture(autouse=True)
 def reset_state():
     """Give every test a clean in-memory store and a flight inside the check-in window."""
@@ -20,6 +25,7 @@ def reset_state():
     yield
 
     bookings.BOOKINGS.clear()
+    bookings._ACCESS_TOKEN_HASHES.clear()
     checkin.BOARDING_PASSES.clear()
     checkin._TAKEN_SEATS.clear()
     for no, flight in FLIGHTS.items():
@@ -34,8 +40,8 @@ def client():
 
 
 @pytest.fixture
-def booking_id(client):
-    """Create one booking on the open flight and return its ID."""
+def booking(client) -> dict:
+    """Create one booking on the open flight and return the creation response."""
     response = client.post(
         "/bookings",
         json={
@@ -45,4 +51,16 @@ def booking_id(client):
         },
     )
     assert response.status_code == 201
-    return response.json()["booking_id"]
+    return response.json()
+
+
+@pytest.fixture
+def booking_id(booking) -> str:
+    """ID of the booking created by the ``booking`` fixture."""
+    return booking["booking_id"]
+
+
+@pytest.fixture
+def auth(booking) -> dict[str, str]:
+    """Authorization header carrying the created booking's access token."""
+    return bearer(booking["access_token"])

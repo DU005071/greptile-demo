@@ -1,15 +1,23 @@
 # Flight Booking API (Greptile Demo)
 
-A small FastAPI project used to test AI code review with Greptile.
+A small FastAPI project used to test AI code review with Greptile and CodeRabbit.
 
 ## Endpoints
 
 - `GET /flights` — list available flights
 - `GET /flights/{flight_no}` — flight details
-- `POST /bookings` — create a booking
+- `POST /bookings` — create a booking; the response includes a one-time `access_token`
 - `GET /bookings/{booking_id}` — booking details
-- `POST /bookings/{booking_id}/check-in` — online check-in, assigns a seat and returns a boarding pass
-- `GET /bookings/{booking_id}/boarding-pass` — boarding pass of a checked-in booking
+- `POST /bookings/{booking_id}/check-in` — online check-in, assigns a seat and returns a boarding pass (requires the booking's access token)
+- `GET /bookings/{booking_id}/boarding-pass` — boarding pass of a checked-in booking (requires the booking's access token)
+
+## Booking access token
+
+- `POST /bookings` returns an `access_token` exactly once. Store it; it cannot be retrieved later.
+- Send it as `Authorization: Bearer <access_token>` when checking in and when fetching the boarding pass.
+- Missing token → `401 Unauthorized`. Unknown booking, or a token that belongs to a different
+  booking → `404 Not Found`. The two cases are deliberately indistinguishable so booking IDs
+  cannot be enumerated.
 
 ## Online check-in rules
 
