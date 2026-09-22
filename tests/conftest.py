@@ -29,11 +29,13 @@ def reset_state():
 
 @pytest.fixture
 def client():
+    """HTTP test client bound to the FastAPI app."""
     return TestClient(app)
 
 
 @pytest.fixture
 def booking_id(client):
+    """Create one booking on the open flight and return its ID."""
     response = client.post(
         "/bookings",
         json={
