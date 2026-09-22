@@ -1,0 +1,35 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# CodeRabbit configuration reference: https://docs.coderabbit.ai/reference/configuration
+language: "en-US"
+
+reviews:
+  profile: "assertive"
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+  auto_review:
+    enabled: true
+    drafts: false
+  path_instructions:
+    - path: "app/**/*.py"
+      instructions: |
+        FastAPI flight booking API backed by in-memory state (flights, bookings,
+        assigned seats, discount usage). Pay special attention to:
+        - Race conditions on shared mutable state (seat inventory, seat
+          assignment, discount redemption counters).
+        - Missing authorization on endpoints that are keyed only by a short
+          booking ID (check-in, boarding pass, cancellation).
+        - Input validation and correct HTTP status codes (404 vs 409 vs 422).
+    - path: "tests/**/*.py"
+      instructions: |
+        pytest + httpx TestClient suite. Check that new endpoints cover error
+        paths (404, 409, 422), check-in window boundaries and repeated calls
+        against the same booking.
+  tools:
+    ruff:
+      enabled: true
+
+chat:
+  auto_reply: true
