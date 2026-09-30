@@ -1,6 +1,9 @@
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
+from typing import Literal
 
 from app.models import Flight
+
+SortKey = Literal["departure", "price"]
 
 
 def _upcoming(days: int, hour: int) -> datetime:
@@ -42,3 +45,36 @@ def list_flights() -> list[Flight]:
 
 def get_flight(flight_no: str) -> Flight | None:
     return FLIGHTS.get(flight_no.upper())
+
+
+def search_flights(
+    origin: str | None = None,
+    destination: str | None = None,
+    departure_date: date | None = None,
+    max_price: float | None = None,
+    include_sold_out: bool = False,
+    sort_by: SortKey = "departure",
+) -> list[Flight]:
+    """Filter the schedule. Every filter is optional; omitted filters match everything.
+
+    ``departure_date`` is compared against the departure date in UTC. Sold-out
+    flights are hidden unless ``include_sold_out`` is set. Sorting by price falls
+    back to departure time for flights with the same base price.
+    """
+    matches = []
+    for flight in FLIGHTS.values():
+        if origin and flight.origin != origin.upper():
+            continue
+        if destination and flight.destination != destination.upper():
+            continue
+        if departure_date and flight.departure.date() != departure_date:
+            continue
+        if max_price is not None and flight.base_price > max_price:
+            continue
+        if not include_sold_out and flight.seats_available < 1:
+            continue
+        matches.append(flight)
+
+    if sort_by == "price":
+        return sorted(matches, key=lambda f: (f.base_price, f.departure))
+    return sorted(matches, key=lambda f: f.departure)
