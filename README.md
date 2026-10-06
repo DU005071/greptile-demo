@@ -8,6 +8,7 @@ A small FastAPI project used to test AI code review with Greptile.
 - `GET /flights/{flight_no}` — flight details
 - `POST /bookings` — create a booking
 - `GET /bookings/{booking_id}` — booking details
+- `DELETE /bookings/{booking_id}` — cancel a booking and release its seat
 
 ## Run locally
 
